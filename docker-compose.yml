@@ -1,0 +1,15 @@
+services:
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: nexus
+    restart: always
+    ports:
+      - "8081:8081" # Nexus UI
+      - "5000:5000" # Docker Hosted Repo
+      - "5001:5001" # Docker Proxy Repo
+      - "5002:5002" # Docker Group Repo
+    volumes:
+      - nexus-data:/nexus-data
+
+volumes:
+  nexus-data:
