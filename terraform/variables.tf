@@ -1,20 +1,13 @@
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "ap-southeast-1"
+  default     = "us-east-1"
 }
 
 variable "project_name" {
   description = "Name tag applied to all resources"
   type        = string
   default     = "nexus-docker-registry"
-}
-
-variable "ami_id" {
-  description = "Ubuntu 22.04 LTS AMI ID (region-specific)"
-  type        = string
-  # ap-southeast-1 Ubuntu 22.04 LTS
-  default = "ami-0df7a207adb9748c7"
 }
 
 variable "instance_type" {
