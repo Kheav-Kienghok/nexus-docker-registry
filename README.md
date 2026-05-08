@@ -1,283 +1,111 @@
-# Nexus Docker Registry (Hosted + Proxy Cache + Group)
+# Nexus Docker Registry
 
-This guide sets up **Sonatype Nexus Repository Manager 3** as a Docker registry with:
+Automated deployment of **Sonatype Nexus 3** on AWS EC2 using Terraform and Ansible.
 
-- **docker-hosted** → private registry (your own images)
-- **docker-proxy** → Docker Hub caching proxy (faster pulls, avoids rate limits)
-- **docker-group** → single endpoint combining both (best practice)
+Nexus is configured with three Docker repositories:
 
----
-
-## Folder Structure
-
-nexus-docker-registry/
-│
-├── README.md
-├── docker-compose.yml
-└── config/
-    └── daemon.json.example
+| Repo | Port | Purpose |
+|---|---|---|
+| docker-hosted | 5000 | Store private images |
+| docker-proxy | 5001 | Cache Docker Hub images |
+| docker-group | 5002 | Single endpoint for push + pull |
 
 ---
 
-## Requirements
+## Prerequisites
 
-- Docker
-- Docker Compose
-
----
-
-# 1. Start Nexus
-
-Run:
-
-docker compose up -d
-
-Verify Nexus is running:
-
-docker ps
-
-Nexus UI will be available at:
-
-http://localhost:8081
+- Terraform >= 1.5
+- Ansible >= 2.14
+- AWS CLI configured (`aws configure`)
+- An EC2 key pair created in your AWS account
 
 ---
 
-# 2. Get the Admin Password
+## Setup
 
-Default username is:
+**1. Fill in your variables**
 
-admin
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+```
 
-To get the default password:
+Edit `terraform.tfvars`:
 
-docker exec nexus cat /nexus-data/admin.password
+```hcl
+key_name             = "your-key-pair-name"
+ssh_private_key_path = "~/.ssh/your-key.pem"
+```
 
-Login to Nexus at:
+**2. Deploy everything**
 
-http://localhost:8081
+```bash
+make all
+```
 
-After login, Nexus forces you to change the password.
-
----
-
-# 3. Create Docker Hosted Repo (Private Registry)
-
-Go to:
-
-Settings (⚙️) → Repositories → Create repository → docker (hosted)
-
-Set:
-
-- Name: docker-hosted
-- HTTP Port: 5000
-- Enable HTTP: YES
-- Deployment policy: Allow redeploy (optional but recommended for testing)
-
-Click Create repository.
-
-This repo stores your internal/private Docker images.
+This runs Terraform to create the EC2 instance, then Ansible to install Docker and start Nexus. At the end, the playbook prints your server IP and initial admin password.
 
 ---
 
-# 4. Create Docker Proxy Repo (Docker Hub Cache)
+## Makefile Commands
 
-Go to:
-
-Settings (⚙️) → Repositories → Create repository → docker (proxy)
-
-Set:
-
-- Name: docker-proxy
-- Remote storage URL: https://registry-1.docker.io
-- Docker Index: Use Docker Hub
-- HTTP Port: 5001
-- Enable HTTP: YES
-
-Click Create repository.
-
-This repo caches Docker Hub images like nginx, redis, node, etc.
+| Command | Description |
+|---|---|
+| `make all` | Full deploy: provision + configure |
+| `make provision` | Terraform only — create EC2 instance |
+| `make configure` | Ansible only — install Docker + start Nexus |
+| `make plan` | Preview Terraform changes |
+| `make output` | Show server IP and URLs |
+| `make destroy` | Tear down all AWS resources |
 
 ---
 
-# 5. Create Docker Group Repo (Best Practice)
+## After Deployment
 
-Go to:
+**1. Create repositories in Nexus UI** at `http://<server-ip>:8081`
 
-Settings (⚙️) → Repositories → Create repository → docker (group)
+Log in with `admin` and the printed password, then create three repositories:
 
-Set:
+- `docker (hosted)` → name: `docker-hosted`, HTTP port: `5000`
+- `docker (proxy)` → name: `docker-proxy`, remote: `https://registry-1.docker.io`, HTTP port: `5001`
+- `docker (group)` → name: `docker-group`, HTTP port: `5002`, members: hosted + proxy
 
-- Name: docker-group
-- HTTP Port: 5002
-- Enable HTTP: YES
+**2. Configure your local Docker client**
 
-Under Group members, add repositories in this order:
+Add the server IP to insecure registries in `/etc/docker/daemon.json`:
 
-1. docker-hosted
-2. docker-proxy
+```json
+{ "insecure-registries": ["<server-ip>:5002"] }
+```
 
-Click Create repository.
-
-This creates ONE endpoint for both pushing + pulling:
-
-localhost:5002
-
----
-
-# 6. Configure Docker to Allow Nexus (Insecure Registry)
-
-Docker blocks HTTP registries by default.
-Since this setup uses HTTP, you must allow it.
-
----
-
-## Linux Setup
-
-Edit Docker config:
-
-sudo nano /etc/docker/daemon.json
-
-Add:
-
-{
-  "insecure-registries": ["localhost:5002"]
-}
-
-Restart Docker:
-
+```bash
 sudo systemctl restart docker
+```
+
+**3. Pull and push**
+
+```bash
+# Pull from Docker Hub via Nexus cache
+docker pull <server-ip>:5002/library/nginx:latest
+
+# Push a private image
+docker tag myapp:1.0 <server-ip>:5002/myapp:1.0
+docker push <server-ip>:5002/myapp:1.0
+```
 
 ---
 
-## Mac / Windows (Docker Desktop)
+## Teardown
 
-Go to:
-
-Docker Desktop → Settings → Docker Engine
-
-Add:
-
-{
-  "insecure-registries": ["localhost:5002"]
-}
-
-Restart Docker Desktop.
+```bash
+make destroy
+```
 
 ---
 
-# 7. Test Docker Hub Proxy Caching
+## Common Errors
 
-Pull nginx through Nexus group registry:
-
-docker pull localhost:5002/nginx:latest
-
-If that fails, try the "official image" path:
-
-docker pull localhost:5002/library/nginx:latest
-
-Pull again (should be much faster because it is cached):
-
-docker pull localhost:5002/nginx:latest
-
-Verify caching in Nexus UI:
-
-Browse → docker-proxy → nginx
-
----
-
-# 8. Push Your Own Image (Private Hosted Repo)
-
-Create a test Dockerfile:
-
-FROM alpine:latest
-CMD ["echo", "hello from nexus"]
-
-Build:
-
-docker build -t myapp:1.0 .
-
-Tag for Nexus group registry:
-
-docker tag myapp:1.0 localhost:5002/myapp:1.0
-
-Push:
-
-docker push localhost:5002/myapp:1.0
-
-Verify in Nexus UI:
-
-Browse → docker-hosted → myapp
-
----
-
-# 9. Pull Your Private Image
-
-Remove local copy:
-
-docker rmi localhost:5002/myapp:1.0
-
-Pull again:
-
-docker pull localhost:5002/myapp:1.0
-
-If it works, Nexus is correctly storing and serving your private images.
-
----
-
-# 10. Why Docker Group Repo is the Best Setup
-
-With a Docker Group repo:
-
-- Pulls like nginx go through docker-proxy (cached from Docker Hub)
-- Pushes like myapp go into docker-hosted (stored internally)
-- Developers only configure ONE registry endpoint (localhost:5002)
-
-This is the standard setup used in real teams.
-
----
-
-# Common Errors / Fixes
-
-## Error: http: server gave HTTP response to HTTPS client
-
-Docker is trying HTTPS by default.
-
-Fix:
-- Ensure Docker daemon config includes: { "insecure-registries": ["localhost:5002"] }
-- Restart Docker.
-
----
-
-## Error: nginx not found
-
-Some official images require /library/ prefix:
-
-docker pull localhost:5002/library/nginx:latest
-
----
-
-# Useful Ports
-
-- Nexus UI: http://localhost:8081
-- Docker Hosted Repo: localhost:5000
-- Docker Proxy Repo: localhost:5001
-- Docker Group Repo: localhost:5002
-
----
-
-# Summary
-
-Your final Docker registry endpoint is:
-
-localhost:5002
-
-Use it like:
-
-Pull public images (cached):
-
-docker pull localhost:5002/nginx:latest
-
-Push private images:
-
-docker tag myapp:1.0 localhost:5002/myapp:1.0
-docker push localhost:5002/myapp:1.0
+| Error | Fix |
+|---|---|
+| `http: server gave HTTP response to HTTPS client` | Add server IP to `insecure-registries` and restart Docker |
+| `connection reset by peer` on port 5002 | HTTP connector not set in Nexus repo — enable HTTP port in repository settings |
+| `library/nginx not found` | Use the `/library/` prefix: `docker pull <ip>:5002/library/nginx:latest` |

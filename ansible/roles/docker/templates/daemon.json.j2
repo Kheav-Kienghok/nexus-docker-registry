@@ -1,0 +1,12 @@
+{
+  "insecure-registries": [
+    "{{ ansible_host }}:5000",
+    "{{ ansible_host }}:5001",
+    "{{ ansible_host }}:5002"
+  ],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}

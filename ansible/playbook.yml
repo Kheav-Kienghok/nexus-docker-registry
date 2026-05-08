@@ -1,0 +1,9 @@
+---
+- name: Configure Nexus Docker Registry Server
+  hosts: nexus
+  become: true
+  gather_facts: true
+
+  roles:
+    - docker
+    - nexus
