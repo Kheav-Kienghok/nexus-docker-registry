@@ -23,16 +23,6 @@ variable "instance_type" {
   default     = "t3.medium"
 }
 
-variable "key_name" {
-  description = "Name of the existing AWS EC2 key pair"
-  type        = string
-}
-
-variable "ssh_private_key_path" {
-  description = "Local path to the private key file (.pem) for Ansible SSH"
-  type        = string
-}
-
 variable "allowed_cidr" {
   description = "CIDR allowed to reach Nexus ports (use your IP for security)"
   type        = string

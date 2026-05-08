@@ -25,5 +25,10 @@ output "docker_proxy_registry" {
 
 output "ssh_command" {
   description = "SSH command to connect to the server"
-  value       = "ssh -i ${var.ssh_private_key_path} ubuntu@${aws_instance.nexus.public_ip}"
+  value       = "ssh -i secrets/${var.project_name}.pem -o StrictHostKeyChecking=no ubuntu@${aws_instance.nexus.public_ip}"
+}
+
+output "private_key_path" {
+  description = "Path to the generated SSH private key"
+  value       = local_sensitive_file.private_key.filename
 }

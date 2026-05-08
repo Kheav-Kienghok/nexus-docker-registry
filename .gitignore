@@ -1,0 +1,13 @@
+# SSH Keys — never commit private keys
+secrets/*.pem
+secrets/*.key
+
+# Terraform state and generated files
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
+# Ansible generated inventory (written by Terraform)
+ansible/inventory/hosts.ini
