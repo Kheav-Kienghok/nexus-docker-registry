@@ -81,7 +81,15 @@ Add the server IP to insecure registries in `/etc/docker/daemon.json`:
 sudo systemctl restart docker
 ```
 
-**3. Pull and push**
+**3. Log in to the Docker registry**
+
+```bash
+docker login <server-ip>:5002
+# Username: admin
+# Password: <use the password printed during deployment>
+```
+
+**4. Pull and push**
 
 ```bash
 # Pull from Docker Hub via Nexus cache
